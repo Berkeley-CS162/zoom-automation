@@ -28,31 +28,48 @@ import click
 from datetime import datetime
 
 MAX_WAIT = 10
+RETRIES = 3
+
+def retry(func):
+    def wrapper_retry(*args):
+        success = False
+        attempts = RETRIES
+        while not success and attempts:
+            success = True
+            try:
+                func(*args)
+            except Exception:
+                success = False
+                attempts -= 1
+    return wrapper_retry
 
 def id_click(driver, id):
-    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, id)))
     elem = driver.find_element_by_id(id)
     ActionChains(driver).move_to_element(elem).perform()
+    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, id)))
     elem.click()
 
+@retry
 def css_click(driver, q):
     if q[0] == "#" and " " not in q:
         return id_click(driver, q[1:])
-    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, q)))
     elem = driver.find_element_by_css_selector(q)
     ActionChains(driver).move_to_element(elem).perform()
+    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, q)))
     elem.click()
 
+@retry
 def css_fill(driver, q, text):
     WebDriverWait(driver, MAX_WAIT).until(EC.visibility_of_element_located((By.CSS_SELECTOR, q)))
     elem = driver.find_element_by_css_selector(q)
     elem.clear()
     elem.send_keys(text)
 
+@retry
 def css_checkbox(driver, q, check):
-    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, q)))
     elem = driver.find_element_by_css_selector(q)
     ActionChains(driver).move_to_element(elem).perform()
+    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, q)))
     if (check and not elem.is_selected()) or (not check and elem.is_selected()):
         elem.click()
 
@@ -117,9 +134,10 @@ def create_meeting(driver, email, topic, cohost, when, duration):
     if cohost:
         css_fill(driver, "#mtg_alternative_host input", email)
         try:
+            WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, "select-item-select-alter-0")))
             css_click(driver, "#select-item-select-alter-0")
         except Exception:
-            print("FAILURE: " + email)
+            print("COHOST ERR: " + email)
             # return "ERROR"
 
     # Wait for save
@@ -127,10 +145,10 @@ def create_meeting(driver, email, topic, cohost, when, duration):
     link_q = ".controls a[href^='https://berkeley.zoom.us/j/']"
     try:
         WebDriverWait(driver, MAX_WAIT).until(EC.presence_of_element_located((By.CSS_SELECTOR, link_q)))
-        print("success: " + email)
+        print("successful: " + email)
         return driver.find_element_by_css_selector(link_q).text
     except Exception:
-        print("FAILURE: " + email)
+        print("SAVE ERROR: " + email)
         return "ERROR"
 
 
@@ -166,3 +184,4 @@ def run(input, output, topic, cohost, when, duration, browser):
 
 if __name__ == '__main__':
     run()
+
