@@ -107,7 +107,7 @@ def create_meeting(driver, email, topic, cohost, when, duration):
 
     # Registration
     css_checkbox(driver, "#option_registration", False)
-    
+
     # Meeting ID
     css_click(driver, "#optionOneTimeId")
 
@@ -136,6 +136,8 @@ def create_meeting(driver, email, topic, cohost, when, duration):
         try:
             WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, "select-item-select-alter-0")))
             css_click(driver, "#select-item-select-alter-0")
+            WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#schedule_form > div.meeting-options-section > div:nth-child(10) > div > label')))
+            css_click(driver,'#schedule_form > div.meeting-options-section > div:nth-child(10) > div > label')
         except Exception:
             print("COHOST ERR: " + email)
             # return "ERROR"
@@ -184,4 +186,3 @@ def run(input, output, topic, cohost, when, duration, browser):
 
 if __name__ == '__main__':
     run()
-
