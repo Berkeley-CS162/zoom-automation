@@ -134,10 +134,10 @@ def create_meeting(driver, email, topic, cohost, when, duration):
     if cohost:
         css_fill(driver, "#mtg_alternative_host input", email)
         try:
-            WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, "select-item-select-alter-0")))
-            css_click(driver, "#select-item-select-alter-0")
+            WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, "select-item-select-0-0")))
+            css_click(driver, "#select-item-select-0-0")
             WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#schedule_form > div.meeting-options-section > div:nth-child(10) > div > label')))
-            css_click(driver,'#schedule_form > div.meeting-options-section > div:nth-child(10) > div > label')
+            css_click(driver, "#schedule_form > div.meeting-options-section > div:nth-child(10) > div > label")
         except Exception:
             print("COHOST ERR: " + email)
             # return "ERROR"
