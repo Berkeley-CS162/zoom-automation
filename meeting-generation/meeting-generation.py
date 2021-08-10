@@ -28,48 +28,31 @@ import click
 from datetime import datetime
 
 MAX_WAIT = 10
-RETRIES = 3
-
-def retry(func):
-    def wrapper_retry(*args):
-        success = False
-        attempts = RETRIES
-        while not success and attempts:
-            success = True
-            try:
-                func(*args)
-            except Exception:
-                success = False
-                attempts -= 1
-    return wrapper_retry
 
 def id_click(driver, id):
+    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, id)))
     elem = driver.find_element_by_id(id)
     ActionChains(driver).move_to_element(elem).perform()
-    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, id)))
     elem.click()
 
-@retry
 def css_click(driver, q):
     if q[0] == "#" and " " not in q:
         return id_click(driver, q[1:])
+    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, q)))
     elem = driver.find_element_by_css_selector(q)
     ActionChains(driver).move_to_element(elem).perform()
-    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, q)))
     elem.click()
 
-@retry
 def css_fill(driver, q, text):
     WebDriverWait(driver, MAX_WAIT).until(EC.visibility_of_element_located((By.CSS_SELECTOR, q)))
     elem = driver.find_element_by_css_selector(q)
     elem.clear()
     elem.send_keys(text)
 
-@retry
 def css_checkbox(driver, q, check):
+    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, q)))
     elem = driver.find_element_by_css_selector(q)
     ActionChains(driver).move_to_element(elem).perform()
-    WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, q)))
     if (check and not elem.is_selected()) or (not check and elem.is_selected()):
         elem.click()
 
@@ -85,7 +68,7 @@ def create_meeting(driver, email, topic, cohost, when, duration):
     # Recurring / When+Duration
     if when == 0 or duration == 0:
         css_checkbox(driver, "#option_rm", True)
-        css_click(driver, "#recurrenceType")
+        css_click(driver, "div[name=recurrenceType]")
         css_click(driver, "#select-item-recurrenceType-3") # No Fixed Time
     else:
         datetime_obj = datetime.fromtimestamp(when)
@@ -93,9 +76,9 @@ def create_meeting(driver, email, topic, cohost, when, duration):
         time_str = str(datetime_obj.hour % 12) + datetime_obj.strftime(":%M")
         css_click(driver, ".ui-datepicker-trigger")
         css_click(driver, "a[aria-label^='" + date_str + "']")
-        css_click(driver, "[name='start_time']")
+        css_click(driver, "#start_time")
         css_click(driver, "dd[aria-label='" + time_str + "']")
-        css_click(driver, "[name='start_time_2']")
+        css_click(driver, "#start_time_2")
         if datetime_obj.hour < 12:
             css_click(driver, "#select-item-start_time_2-0") # AM
         else:
@@ -104,9 +87,6 @@ def create_meeting(driver, email, topic, cohost, when, duration):
         css_click(driver, "#select-item-duration_hr-" + str(duration // 60))
         css_click(driver, "#duration_min")
         css_click(driver, "#select-item-duration_min-" + str((duration % 60) // 15))
-
-    # Registration
-    css_checkbox(driver, "#option_registration", False)
 
     # Meeting ID
     css_click(driver, "#optionOneTimeId")
@@ -133,24 +113,19 @@ def create_meeting(driver, email, topic, cohost, when, duration):
     # Alternative Hosts
     if cohost:
         css_fill(driver, "#mtg_alternative_host input", email)
-        try:
-            WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.ID, "select-item-select-0-0")))
-            css_click(driver, "#select-item-select-0-0")
-            WebDriverWait(driver, MAX_WAIT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#schedule_form > div.meeting-options-section > div:nth-child(10) > div > label')))
-            css_click(driver, "#schedule_form > div.meeting-options-section > div:nth-child(10) > div > label")
-        except Exception:
-            print("COHOST ERR: " + email)
-            # return "ERROR"
+        time.sleep(0.1)
+        css_click(driver, "#select-0-popup-list")
+        time.sleep(0.1)
 
     # Wait for save
     css_click(driver, ".submit")
     link_q = ".controls a[href^='https://berkeley.zoom.us/j/']"
     try:
         WebDriverWait(driver, MAX_WAIT).until(EC.presence_of_element_located((By.CSS_SELECTOR, link_q)))
-        print("successful: " + email)
+        print("Created meeting for " + email)
         return driver.find_element_by_css_selector(link_q).text
     except Exception:
-        print("SAVE ERROR: " + email)
+        print("Failed to create meeting for " + email)
         return "ERROR"
 
 
@@ -158,8 +133,8 @@ def create_meeting(driver, email, topic, cohost, when, duration):
 @click.argument('input', type=click.File('r'))
 @click.argument('output', type=click.File('w'))
 
-@click.option('-t', '--topic', default="Meeting (@)", help="Name of meeting")
-@click.option('-c', '--cohost', default=False, is_flag=True, help='Add emails as cohosts')
+@click.option('-t', '--topic', default="Meeting (@)", help="Name of meeting (@ for email)")
+@click.option('-c', '--cohost', default=False, is_flag=True, help='Add students as cohost')
 
 # If when/duration are not specified, then the meeting will be scheduled as recurring
 @click.option('-w', '--when', default=0, type=int, help="Date/time of meeting, as timestamp")
@@ -181,8 +156,13 @@ def run(input, output, topic, cohost, when, duration, browser):
     for row in email_reader:
         if row:
             email = row[0]
-            link = create_meeting(driver, email, topic.replace("@", email), cohost, when, duration)
+            try:
+                link = create_meeting(driver, email, topic.replace("@", email), cohost, when, duration)
+            except Exception as e:
+                print(f"failed to create meeting: {e}")
+                link = "ERROR"
             zoom_writer.writerow([email, link])
 
 if __name__ == '__main__':
     run()
+
